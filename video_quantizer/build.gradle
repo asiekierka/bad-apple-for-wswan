@@ -1,0 +1,60 @@
+plugins {
+    id 'java'
+    id "io.freefair.lombok" version "6.3.0"
+    id 'com.github.johnrengelman.shadow' version "7.1.2"
+/*    id "com.github.hierynomus.license" version "0.16.1" */
+}
+
+group 'pl.asie.bawsvq'
+version '0.1.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.beust:jcommander:1.82'
+    implementation 'com.google.guava:guava:31.1-jre'
+    implementation 'it.unimi.dsi:fastutil:8.5.8'
+
+    testImplementation(platform('org.junit:junit-bom:5.7.0'))
+    testImplementation('org.junit.jupiter:junit-jupiter')
+}
+
+/* license {
+    header = file('docs/licenses/COPYING')
+    exclude "** slash *.txt"
+} */
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+sourceSets {
+    main {
+        resources {
+            srcDirs "src/main/resources", "docs"
+        }
+    }
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'pl.asie.bawsvq.Main'
+    }
+}
+
+artifacts {
+    shadowJar
+}
+
+shadowJar {
+    minimize()
+}
+
+build.dependsOn(shadowJar)
+
+tasks.withType(Copy).all {
+    duplicatesStrategy 'exclude'
+}
