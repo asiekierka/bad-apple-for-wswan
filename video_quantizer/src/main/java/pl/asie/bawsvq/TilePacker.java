@@ -86,6 +86,7 @@ public class TilePacker {
 		if (allocationId < 0) {
 			for (int i = 0; i < tileAllocation.length; i++) {
 				int ii = (lastTileAllocationId + i) % tileAllocation.length;
+				if (ii == 0) continue;
 				if (!currentlyDisplayedTiles.contains(ii)) {
 					if (tileGlobalIdToAllocationId.get(tileAllocation[ii]) == ii) {
 						tileGlobalIdToAllocationId.remove(tileAllocation[ii]);
@@ -126,11 +127,12 @@ public class TilePacker {
 			currentlyDisplayedTiles.add(x);
 		}
 
+		int scrpos = 0;
 		int tpos = 0;
-		int nextTpos = 0;
+		int nextScrpos = 0;
 
-		for (int ty = 0; ty < this.tileHeight; ty++) {
-			for (int tx = 0; tx < this.tileWidth; tx++, tpos++) {
+		for (int ty = 0; ty < this.tileHeight; ty++, scrpos += 8) {
+			for (int tx = 0; tx < this.tileWidth; tx++, scrpos++, tpos++) {
 				QuantizedImage lastTile = lastImage.subview(tx * 8, ty * 8, 8, 8);
 				QuantizedImage tile = img.subview(tx * 8, ty * 8, 8, 8);
 				if (!Objects.equals(tile, lastTile)) {
@@ -139,13 +141,13 @@ public class TilePacker {
 						id = globalTiles.size();
 						globalTiles.add(tile);
 						tileToGlobalId.put(tile, id);
-						tileToGlobalId.put(tile.flipHorizontal(), id | FLIP_H);
-						tileToGlobalId.put(tile.flipVertical(), id | FLIP_V);
-						tileToGlobalId.put(tile.flipHorizontal().flipVertical(), id | FLIP_H | FLIP_V);
-						tileToGlobalId.put(tile.invert(), id | INVERT);
-						tileToGlobalId.put(tile.flipHorizontal().invert(), id | FLIP_H | INVERT);
-						tileToGlobalId.put(tile.flipVertical().invert(), id | FLIP_V | INVERT);
-						tileToGlobalId.put(tile.flipHorizontal().flipVertical().invert(), id | FLIP_H | FLIP_V | INVERT);
+						tileToGlobalId.putIfAbsent(tile.flipHorizontal(), id | FLIP_H);
+						tileToGlobalId.putIfAbsent(tile.flipVertical(), id | FLIP_V);
+						tileToGlobalId.putIfAbsent(tile.flipHorizontal().flipVertical(), id | FLIP_H | FLIP_V);
+						tileToGlobalId.putIfAbsent(tile.invert(), id | INVERT);
+						tileToGlobalId.putIfAbsent(tile.flipHorizontal().invert(), id | FLIP_H | INVERT);
+						tileToGlobalId.putIfAbsent(tile.flipVertical().invert(), id | FLIP_V | INVERT);
+						tileToGlobalId.putIfAbsent(tile.flipHorizontal().flipVertical().invert(), id | FLIP_H | FLIP_V | INVERT);
 						globalTilesEstimatedSize += getTileStorageSize(tile);
 					}
 					int allocId = allocateAllocationIdForTile(id);
@@ -172,24 +174,33 @@ public class TilePacker {
 					}
 					int idMasked = id & ID_MASK;
 
-					// global_id needs 18 bits
-					// xy needs 9 bits
-					// tile_data needs 12 bits
-					if (allocNew) {
-						// 0x0 - 0x7
-						cmdOut.writeByte((tpos >> 2));
-						cmdOut.writeInt((tpos << 30) | (tileData << 18) | idMasked);
-					} else {
-						if (tpos == nextTpos) {
-							// 0xE
-							cmdOut.writeShort(0xE000 | tileData);
+					while (scrpos > nextScrpos) {
+						if ((scrpos - nextScrpos) > 127) {
+							cmdOut.writeByte(127);
+							nextScrpos += 127;
+//							cmdOut.writeByte(0xF2 | ((tpos - nextTpos) >> 8));
+//							cmdOut.writeByte((tpos - nextTpos) & 0xFF);
+//							nextTpos += (tpos - nextTpos);
 						} else {
-							// 0xC - 0xD
-							cmdOut.writeByte(0xC0 | (tpos >> 4));
-							cmdOut.writeShort((tpos << 12) | tileData);
+							cmdOut.writeByte(scrpos - nextScrpos);
+							nextScrpos += (scrpos - nextScrpos);
 						}
 					}
-					nextTpos = tpos + 1;
+
+					// global_id needs 17 bits
+					// tile_data needs 12 bits
+
+					if (allocId == 0) {
+						// 0xC - 0xD
+						cmdOut.writeByte(((id & INVERT) != 0) ? 0xF5 : 0xF4);
+					} else if (allocNew) {
+						// 0x8 - 0xB
+						cmdOut.writeInt(0x80000000 | (tileData << 18) | idMasked);
+					} else {
+						// 0xE
+						cmdOut.writeShort(0xE000 | tileData);
+					}
+					nextScrpos = scrpos + 1;
 				}
 			}
 		}

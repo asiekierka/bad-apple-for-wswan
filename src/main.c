@@ -24,18 +24,6 @@ volatile uint16_t next_vblank_ticks;
 
 extern void tilecpy(void * restrict s1, const void __far* restrict s2);
 
-static void increment_next_tile_pos(void) {
-	if ((tile_pos & 0x1F) == 23) {
-		tile_pos += 9;
-	} else {
-		tile_pos++;
-	}
-}
-
-static void unpack_and_set_tile_pos(uint16_t value) {
-	tile_pos = ((value / 24) << 5) | (value % 24); 
-}
-
 static void copy_global_tile(uint8_t bank, uint16_t ofs, uint16_t pos) {
 	set_rom_bank0(ASSET_TILES_BIN_BANK + bank);
 	tilecpy(MEM_TILE(pos), MEM_ROM_BANK0 + ofs);
@@ -50,47 +38,43 @@ bool parse_until_next_frame(void) {
 		// fetch next command
 		uint8_t cmd = MEM_ROM_BANK0[current_command_pos++];
 		if (cmd <= 0x7F) {
+			// increment tile_pos
+			tile_pos += cmd;
+		} else if (cmd <= 0xBF) {
 			// copy global_tile + place tile_data
 			uint8_t cmd2 = MEM_ROM_BANK0[current_command_pos++];
 			uint8_t cmd3 = MEM_ROM_BANK0[current_command_pos++];
 			uint8_t cmd4 = MEM_ROM_BANK0[current_command_pos++];
-			uint8_t cmd5 = MEM_ROM_BANK0[current_command_pos++];
-			uint8_t global_tile_bank = (cmd4 >> 4) | ((cmd3 & 0x03) << 4);
-			uint16_t global_tile_ofs = (cmd5 << 4) | (cmd4 << 12);
-			uint16_t tile_data = (cmd3 >> 2) | ((cmd2 & 0x0F) << 6) | ((cmd2 & 0x30) << 10);
-			uint16_t new_tpos_packed = (cmd << 2) | (cmd2 >> 6);
+			uint8_t global_tile_bank = (cmd3 >> 4) | ((cmd2 & 0x03) << 4);
+			uint16_t global_tile_ofs = (cmd4 << 4) | (cmd3 << 12);
+			uint16_t tile_data = (cmd2 >> 2) | ((cmd & 0x0F) << 6) | ((cmd & 0x30) << 10);
 			copy_global_tile(global_tile_bank, global_tile_ofs, tile_data & 0x1FF);
-			unpack_and_set_tile_pos(new_tpos_packed);
-			next_screen[tile_pos] = tile_data;
-			increment_next_tile_pos();
-		} else if (cmd <= 0xDF) {
-			// place tile_data + set tpos
-			uint8_t cmd2 = MEM_ROM_BANK0[current_command_pos++];
-			uint16_t tile_data = MEM_ROM_BANK0[current_command_pos++] | ((cmd2 & 0x03) << 8) | ((cmd2 & 0x0C) << 12);
-			int16_t new_tpos_packed = (cmd2 >> 4) | ((cmd & 0x1F) << 4);
-			unpack_and_set_tile_pos(new_tpos_packed);
-			next_screen[tile_pos] = tile_data;
-			increment_next_tile_pos();
+			next_screen[tile_pos++] = tile_data;
 		} else if (cmd <= 0xEF) {
 			// place tile_data
 			uint16_t tile_data = MEM_ROM_BANK0[current_command_pos++] | ((cmd & 0x03) << 8) | ((cmd & 0x0C) << 12);
-			next_screen[tile_pos] = tile_data;
-			increment_next_tile_pos();
-		} else if (cmd >= 0xF8) {
-			// end frame
-			next_vblank_ticks = cmd & 0x7;
-			break;
+			next_screen[tile_pos++] = tile_data;
+		} else if (cmd == 0xF4) {
+			// place empty tile
+			next_screen[tile_pos++] = 0;
+		} else if (cmd == 0xF5) {
+			// place empty inv. tile
+			next_screen[tile_pos++] = (1 << 9);
 		} else if (cmd == 0xF1) {
 			// switch bank
 			current_command_bank++;
 			current_command_pos = 0;
 			set_rom_bank0(current_command_bank);
-		} else if (cmd == 0xF7) {
-			// set black border
-			next_display_control = DISPLAY_SCR2_ENABLE | DISPLAY_SCR2_WIN_INSIDE | DISPLAY_BORDER(7);
 		} else if (cmd == 0xF6) {
 			// set white border
 			next_display_control = DISPLAY_SCR2_ENABLE | DISPLAY_SCR2_WIN_INSIDE | DISPLAY_BORDER(0);
+		} else if (cmd == 0xF7) {
+			// set black border
+			next_display_control = DISPLAY_SCR2_ENABLE | DISPLAY_SCR2_WIN_INSIDE | DISPLAY_BORDER(7);
+		} else if (cmd >= 0xF8) {
+			// end frame
+			next_vblank_ticks = cmd & 0x7;
+			break;
 		} else if (cmd == 0xF0) {
 			// done!
 			outportb(IO_INT_ENABLE, INTR_ENABLE_VBLANK);
@@ -130,7 +114,7 @@ int main(void) {
 	outportb(IO_SCR2_SCRL_X, -16);
 	outportb(IO_SCR2_SCRL_Y, 0);
 
-	next_dispctrl = DISPLAY_SCR2_ENABLE | DISPLAY_SCR2_WIN_INSIDE | DISPLAY_BORDER(7);
+	next_display_control = DISPLAY_SCR2_ENABLE | DISPLAY_SCR2_WIN_INSIDE | DISPLAY_BORDER(7);
 
 	// configure interrupts/etc.
 
@@ -165,7 +149,7 @@ int main(void) {
 	while (1) {
 		// flip buffers
 		outportb(IO_SCR_BASE, SCR2_BASE(next_screen));
-		outportw(IO_DISPLAY_CTRL, next_dispctrl);
+		outportw(IO_DISPLAY_CTRL, next_display_control);
 		uint16_t *tmp = curr_screen;
 		curr_screen = next_screen;
 		next_screen = tmp;
