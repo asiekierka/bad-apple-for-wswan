@@ -1,0 +1,5 @@
+res/tiles.bin|bank_start
+res/audio.bin|bank_start
+res/commands.bin|bank_start
+obj/end_card.tiles.bin|one_bank
+obj/end_card.map.bin|one_bank
