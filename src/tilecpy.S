@@ -10,8 +10,6 @@ tilecpy:
 	push	di
 	push	ds
 	push	es
-	push	bp
-	mov	bp, sp
 	mov	di, ax
 	mov	ds, cx
 	mov	si, dx
@@ -20,7 +18,6 @@ tilecpy:
 	mov	cl, 0x8
 	cld
 	rep	movsw
-	pop	bp
 	pop	es
 	pop	ds
 	pop	di
