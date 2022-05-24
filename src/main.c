@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <ws.h>
+#include "config.h"
 #include "fs.h"
 
 uint8_t current_command_bank;
@@ -22,11 +23,11 @@ uint16_t next_display_control;
 volatile uint16_t vblank_ticks;
 volatile uint16_t next_vblank_ticks;
 
-extern void tilecpy(void * restrict s1, const void __far* restrict s2);
+extern void tilecpy(void * restrict s1, uint16_t s2);
 
 static void copy_global_tile(uint8_t bank, uint16_t ofs, uint16_t pos) {
 	set_rom_bank0(ASSET_TILES_BIN_BANK + bank);
-	tilecpy(MEM_TILE(pos), MEM_ROM_BANK0 + ofs);
+	tilecpy(MEM_TILE(pos), ofs);
 	set_rom_bank0(current_command_bank);
 }
 
@@ -43,10 +44,15 @@ bool parse_until_next_frame(void) {
 		} else if (cmd <= 0xBF) {
 			// copy global_tile + place tile_data
 			uint8_t cmd2 = MEM_ROM_BANK0[current_command_pos++];
-			uint8_t cmd3 = MEM_ROM_BANK0[current_command_pos++];
-			uint8_t cmd4 = MEM_ROM_BANK0[current_command_pos++];
-			uint8_t global_tile_bank = (cmd3 >> 4) | ((cmd2 & 0x03) << 4);
-			uint16_t global_tile_ofs = (cmd4 << 4) | (cmd3 << 12);
+                        uint8_t cmd3 = MEM_ROM_BANK0[current_command_pos++];
+                        uint8_t cmd4 = MEM_ROM_BANK0[current_command_pos++];
+#ifdef IS_2BPP
+                        uint8_t global_tile_bank = (cmd3 >> 4) | ((cmd2 & 0x03) << 4);
+                        uint16_t global_tile_ofs = (cmd4 << 4) | (cmd3 << 12);
+#else
+                        uint8_t global_tile_bank = (cmd3 >> 5) | ((cmd2 & 0x03) << 3);
+                        uint16_t global_tile_ofs = (cmd4 << 3) | (cmd3 << 11);
+#endif
 			uint16_t tile_data = (cmd2 >> 2) | ((cmd & 0x0F) << 6) | ((cmd & 0x30) << 10);
 			copy_global_tile(global_tile_bank, global_tile_ofs, tile_data & 0x1FF);
 			next_screen[tile_pos++] = tile_data;
@@ -97,7 +103,7 @@ int main(void) {
 	// configure display
 	outportw(IO_DISPLAY_CTRL, 0);
 
-	video_set_gray_lut(GRAY_LUT_DEFAULT);
+	video_set_gray_lut(GRAY_LUT(0, 2, 5, 6, 8, 10, 13, 15));
 	outportw(IO_SCR_PAL_0, 0x7520);
 	outportw(IO_SCR_PAL_1, 0x0257);
 

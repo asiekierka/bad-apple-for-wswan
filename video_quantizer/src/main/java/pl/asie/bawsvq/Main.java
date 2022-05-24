@@ -75,8 +75,9 @@ public class Main {
 				6139, // w
 				6513 // b
 		);
+		boolean is2bpp = true;
 
-		ImageQuantizer q = new ImageQuantizer(192, 144, 4, OrderedDitherMatrix.MATRIX_4x4);
+		ImageQuantizer q = new ImageQuantizer(192, 144, is2bpp ? 4 : 2, OrderedDitherMatrix.MATRIX_4x4);
 		List<QuantizedImage> images;
 		File imageCache = new File("imageCache.bin");
 		if (imageCache.exists()) {
@@ -91,7 +92,7 @@ public class Main {
 			saveImages(images, borderFlipFrames);
 		}
 
-		TilePacker packer = new TilePacker(24, 18, 4,
+		TilePacker packer = new TilePacker(24, 18, q.getSteps(),
 				(12000.0 / 159.0) / 30.0);
 		int frameCtr = 1;
 		for (QuantizedImage img : images) {

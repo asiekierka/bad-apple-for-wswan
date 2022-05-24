@@ -61,12 +61,14 @@ public class TilePacker {
 				int v0 = 0;
 				int v1 = 0;
 				for (int ix = 0; ix < 8; ix++) {
-					int v = image.get(ix, iy) ^ 3;
+					int v = image.get(ix, iy) ^ 0xFF;
 					v0 |= (v & 0x1) << (7 - ix);
 					v1 |= (((v >> 1) & 0x1)) << (7 - ix);
 				}
 				stream.write(v0);
-				stream.write(v1);
+				if (image.getSteps() >= 4) {
+					stream.write(v1);
+				}
 			}
 		}
 	}
@@ -77,7 +79,7 @@ public class TilePacker {
 	}
 
 	private int getTileStorageSize(QuantizedImage img) {
-		return 16;
+		return img.getSteps() == 4 ? 16 : 8;
 	}
 
 	private int allocateAllocationIdForTile(int globalId) throws IOException {
