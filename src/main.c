@@ -23,6 +23,14 @@ uint16_t next_display_control;
 volatile uint16_t vblank_ticks;
 volatile uint16_t next_vblank_ticks;
 
+#ifdef IS_ADPCM
+int16_t adpcm_sample = 0;
+int16_t adpcm_predictor = 0;
+int16_t adpcm_step_index = 0;
+int16_t adpcm_step = 7;
+uint8_t adpcm_last_byte;
+#endif
+
 extern void tilecpy(void * restrict s1, uint16_t s2);
 
 static void copy_global_tile(uint8_t bank, uint16_t ofs, uint16_t pos) {
